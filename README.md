@@ -4,6 +4,10 @@ A survey and benchmark of speculative decoding for large language models, mainta
 
 When does a longer accepted draft make generation faster? The planned comparison fixes the Qwen3-4B target, trains compatible drafters for one epoch on the same PerfectBlend rollouts, and measures them against matched autoregressive runs. Across the eight benchmarks, report committed tokens per verification round (including the bonus token), output tokens per second, and speedup over the autoregressive control.
 
+## Method experiments
+
+Each experimental branch is named for its method and starts from `main`. The `orthrus` branch trains Orthrus on Qwen3-4B for one epoch and compares greedy decoding against matched AR runs on eight workloads. Each trainer computes its own teacher features by default. The launcher also supports a dedicated teacher, a full-size training throughput benchmark and quarter-epoch checkpoints. [Orthrus experiment guide](methods/orthrus/README.md)
+
 ## Ascend 910B3 development environment
 
 The `cann-9.1-910b3` branch of each shared fork starts at the original project's release shown below. The vLLM Ascend release targets CANN and NNAL 9.1.0, PyTorch 2.10.0, TorchNPU 2.10.0.post4, and Triton Ascend 3.2.2. Speculators 0.7.0 declares support for this PyTorch version and for Transformers 5.5.4, which the Ascend release pins. [Upstream compatibility matrix](https://docs.vllm.ai/projects/ascend/en/latest/community/versioning_policy.html#release-compatibility-matrix)
