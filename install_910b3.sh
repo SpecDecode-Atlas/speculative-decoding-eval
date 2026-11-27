@@ -7,7 +7,19 @@ branch=cann-9.1-910b3
 workspace=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 env_dir="$workspace/.envs/cann91-py311"
 mode=${1:-install}
-case "$mode" in install|--clone-only) ;; *) echo "Usage: bash install_910b3.sh [--clone-only]" >&2; exit 2 ;; esac
+usage() { echo "Usage: bash install_910b3.sh [--active-env|--clone-only]" >&2; exit 2; }
+[[ $# -le 1 ]] || usage
+case "$mode" in
+    install|--clone-only) ;;
+    --active-env)
+        env_dir=${CONDA_PREFIX:-}
+        if [[ -z "$env_dir" || ! -d "$env_dir/conda-meta" ]]; then
+            echo "Activate the target Conda environment before using --active-env." >&2
+            exit 2
+        fi
+        ;;
+    *) usage ;;
+esac
 
 mkdir -p "$workspace/install-logs"
 log=$(mktemp "$workspace/install-logs/910b3-$(date +%Y%m%d-%H%M%S)-XXXXXX.log")
@@ -67,7 +79,7 @@ done
 conda_bin=${CONDA_EXE:-$(type -P conda || true)}
 if [[ -z "$conda_bin" && -x "$HOME/miniforge3/bin/conda" ]]; then conda_bin="$HOME/miniforge3/bin/conda"; fi
 [[ -x "$conda_bin" ]] || fail "Initialize Conda (or set CONDA_EXE to its executable) and rerun."
-echo "[2/4] Preparing an isolated Python 3.11 environment"
+echo "[2/4] Preparing Python 3.11 in $env_dir"
 if [[ ! -e "$env_dir" ]]; then
     "$conda_bin" create -y -p "$env_dir" python=3.11 pip
 fi
@@ -82,7 +94,15 @@ source "$CANN_ROOT/nnal/atb/set_env.sh"
 export ASCEND_HOME_PATH="${ASCEND_HOME_PATH:-$CANN_ROOT/cann}"
 export SOC_VERSION=ascend910b3 COMPILE_CUSTOM_KERNELS=1
 export MAX_JOBS="${MAX_JOBS:-2}" CMAKE_BUILD_PARALLEL_LEVEL="${MAX_JOBS:-2}" CARGO_BUILD_JOBS="${MAX_JOBS:-2}"
-python -c 'import sys; assert sys.version_info[:2] == (3, 11), sys.version'
+python - "$env_dir" <<'PY'
+import sys
+from pathlib import Path
+
+if Path(sys.prefix).resolve() != Path(sys.argv[1]).resolve():
+    raise SystemExit(f'Expected Python in {sys.argv[1]}, found {sys.executable}')
+if sys.version_info[:2] != (3, 11):
+    raise SystemExit(f'Expected Python 3.11, found {sys.version}')
+PY
 git -C "$workspace/vllm-ascend" submodule update --init --recursive
 
 echo "[3/4] Installing the source packages and the 910B3 kernels"
@@ -112,8 +132,10 @@ SPECULATORS_BUILD_TYPE=release python -m pip install "${indices[@]}" \
 
 echo "[4/4] Checking packages, the Ascend plugin, and NPU visibility"
 python -m pip check
-python - <<'PY'
+python -P - "$workspace" <<'PY'
+import sys
 from importlib.metadata import version
+from pathlib import Path
 import torch
 import torch_npu
 import vllm
@@ -121,6 +143,14 @@ import vllm_ascend
 import speculators
 import hs_connectors
 from vllm.platforms import current_platform
+workspace = Path(sys.argv[1]).resolve()
+for module, checkout in ((vllm, 'vllm'), (vllm_ascend, 'vllm-ascend'),
+                         (speculators, 'speculators'), (hs_connectors, 'speculators/hs_connectors')):
+    expected = workspace / checkout
+    source = module.__file__
+    if not source or not Path(source).resolve().is_relative_to(expected):
+        raise SystemExit(f'{module.__name__} was imported from {source}. Expected a file under {expected}.')
+    print(f'{module.__name__} source: {source}')
 for name in ('vllm', 'vllm-ascend', 'speculators', 'hs-connectors', 'torch', 'torch-npu', 'transformers', 'triton-ascend'):
     print(f'{name:16} {version(name)}')
 print('vLLM platform:', current_platform.device_type)
