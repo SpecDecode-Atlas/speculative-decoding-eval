@@ -22,6 +22,8 @@ export CANN_ROOT=/path/to/CANN/9.1.0
 bash speculative-decoding-eval/install_910b3.sh
 ```
 
+The default install creates or reuses `.envs/cann91-py311` in the workspace. To install into an existing Python 3.11 Conda environment, activate it, set `CANN_ROOT` as above, and run `bash speculative-decoding-eval/install_910b3.sh --active-env`. Pip replaces the editable packages in that environment. The final checks print and verify the source directory for each import.
+
 To download and verify the sources only, use `bash speculative-decoding-eval/install_910b3.sh --clone-only`. The install log is in `install-logs/` beside the four repositories. Use `serving/` for server launchers and `evaluation/` for benchmark drivers and configurations.
 
 ## Working together
